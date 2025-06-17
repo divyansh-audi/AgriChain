@@ -1,0 +1,27 @@
+{
+  "name": "Farmer: Ramesh Singh",
+  "description": "A dedicated farmer from Madhya Pradesh cultivating organic wheat.",
+  "image": "https://ipfs.io/ipfs/QmNMk7FJBHKmd6vR79hwVsehu7xbwK56vw2ELirmfZqw8M",
+  "attributes": [
+    {
+      "trait_type": "Location",
+      "value": "Madhya Pradesh"
+    },
+    {
+      "trait_type": "Crop Type",
+      "value": "Wheat"
+    },
+    {
+      "trait_type": "Farming Method",
+      "value": "Organic"
+    },
+    {
+      "trait_type": "Farm Size (Acres)",
+      "value": "4.5"
+    },
+    {
+      "trait_type": "Years of Experience",
+      "value": "12"
+    }
+  ]
+}
