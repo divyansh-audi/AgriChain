@@ -37,7 +37,7 @@ contract WeatherTriggeredInsurance is FunctionsClient, ConfirmedOwner, Automatio
     mapping(address => uint256[7]) private s_addressToRainData;
     mapping(address => uint256) private s_addressToTimeAPIIsCalled;
 
-    constructor(address router, bytes32 donId, uint32 gasLimit, string memory source, uint64 subscriptionId)
+    constructor(address router, bytes32 donId, uint32 gasLimit, uint64 subscriptionId, string memory source)
         FunctionsClient(router)
         ConfirmedOwner(msg.sender)
     {
@@ -78,7 +78,7 @@ contract WeatherTriggeredInsurance is FunctionsClient, ConfirmedOwner, Automatio
 
     function getTimePeriodBasedOnFundingProvided(uint256 _amountFunded) public pure returns (uint256) {
         uint256 baseTime = 365 days;
-        return (baseTime * 0.001 ether) / _amountFunded;
+        return (baseTime * 0.01 ether) / _amountFunded;
     }
 
     function checkUpkeep(bytes calldata /*checkData*/ )

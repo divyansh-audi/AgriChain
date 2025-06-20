@@ -4,6 +4,7 @@ pragma solidity ^0.8.18;
 import {Script} from "forge-std/Script.sol";
 import {FarmerNFT} from "../src/FarmerNFT.sol";
 import {DevOpsTools} from "lib/foundry-devops/src/DevOpsTools.sol";
+import {HelperConfig} from "./HelperConfig.s.sol";
 
 contract MintFarmerNft is Script {
     // string public constant PUG_URI =
