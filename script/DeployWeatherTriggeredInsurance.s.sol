@@ -15,7 +15,12 @@ contract DeployWeatherTriggeredInsurance is Script {
         HelperConfig.NetworkConfig memory config = helperConfig.getConfig();
         vm.startBroadcast();
         WeatherTriggeredInsurance weatherTrig = new WeatherTriggeredInsurance(
-            config.router, config.donId, config.gasLimit, config.subscriptionId, config.sourceString
+            config.router,
+            config.donId,
+            config.gasLimit,
+            config.subscriptionId,
+            config.sourceString,
+            config.mostRecentDeployed
         );
         vm.stopBroadcast();
         return (weatherTrig, helperConfig);

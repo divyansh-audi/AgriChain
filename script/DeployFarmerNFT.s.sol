@@ -12,6 +12,7 @@ contract DeployFarmerNFT is Script {
         vm.startBroadcast();
         farmerNFT = new FarmerNFT();
         vm.stopBroadcast();
+        // DevOpsTools.saveDeployment("FarmerNFT", address(farmerNFT));
         return farmerNFT;
     }
 }

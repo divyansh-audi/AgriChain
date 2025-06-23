@@ -2,6 +2,7 @@
 
 pragma solidity ^0.8.19;
 
+import {console} from "forge-std/console.sol";
 import {IERC721} from "forge-std/interfaces/IERC721.sol";
 import {DevOpsTools} from "lib/foundry-devops/src/DevOpsTools.sol";
 import {AutomationCompatibleInterface} from "@chainlink/contracts/src/v0.8/interfaces/AutomationCompatibleInterface.sol";
@@ -14,8 +15,9 @@ contract WeatherTriggeredInsurance is FunctionsClient, ConfirmedOwner, Automatio
 
     error WeatherTriggeredInsurance__FarmerNFTNotMinted();
     error WeatherTriggeredInsurance__NotEnoughFundsToGetInsurance();
-    error UnexpectedRequestID(bytes32 requestId);
+    error UnexpectedRequestID(bytes32);
     error WeatherTriggeredInsurance__TransferFailed();
+    // error WeatherTriggeredInsurance__UpkeepNotNeeded(address);
 
     address payable[] private s_InsuranceUsers;
     uint256[] private s_startInsuranceTime;
@@ -37,15 +39,20 @@ contract WeatherTriggeredInsurance is FunctionsClient, ConfirmedOwner, Automatio
     mapping(address => uint256[7]) private s_addressToRainData;
     mapping(address => uint256) private s_addressToTimeAPIIsCalled;
 
-    constructor(address router, bytes32 donId, uint32 gasLimit, uint64 subscriptionId, string memory source)
-        FunctionsClient(router)
-        ConfirmedOwner(msg.sender)
-    {
+    constructor(
+        address router,
+        bytes32 donId,
+        uint32 gasLimit,
+        uint64 subscriptionId,
+        string memory source,
+        address mostRecentDeployed
+    ) FunctionsClient(router) ConfirmedOwner(msg.sender) {
         s_subscriptionId = subscriptionId;
         s_counter = 0;
         i_donID = donId;
         i_gasLimit = gasLimit;
         s_source = source;
+        farmerNft = IERC721(mostRecentDeployed);
     }
 
     IERC721 public farmerNft;
@@ -56,11 +63,17 @@ contract WeatherTriggeredInsurance is FunctionsClient, ConfirmedOwner, Automatio
     event Response(bytes32 indexed requestId, string character, bytes response, bytes err);
     event OneDayCheckUpdated(address indexed user);
     event LocationAssigned(address indexed user);
+    event DroughtPayout(address indexed user, uint256 amount);
+    // event CheckIndexSelected(uint256 indexed index, address user);
+    event AddressToAPICalledUpdated(uint256 indexed valueOfNumberofCalls);
 
-    function getInsurance(address to, string memory location) public payable {
-        address mostRecentDeployment = DevOpsTools.get_most_recent_deployment("FarmerNFT", block.chainid);
-        farmerNft = IERC721(mostRecentDeployment);
-        if (farmerNft.balanceOf(to) <= 0) {
+    function getInsurance(string memory location) public payable {
+        // // console.log("Most recent deployed", s_mostRecentDeployed);
+        // console.log("FarmerNFT Address:", address(farmerNft));
+        // console.log("msg.sender:", msg.sender);
+        // console.log("Balance:", farmerNft.balanceOf(msg.sender));
+
+        if (farmerNft.balanceOf(msg.sender) == 0) {
             revert WeatherTriggeredInsurance__FarmerNFTNotMinted();
         }
         if (msg.value < 0.001 ether) {
@@ -78,16 +91,18 @@ contract WeatherTriggeredInsurance is FunctionsClient, ConfirmedOwner, Automatio
 
     function getTimePeriodBasedOnFundingProvided(uint256 _amountFunded) public pure returns (uint256) {
         uint256 baseTime = 365 days;
-        return (baseTime * 0.01 ether) / _amountFunded;
+        return (baseTime * 0.001 ether) / _amountFunded;
     }
 
     function checkUpkeep(bytes calldata /*checkData*/ )
         external
+        view
         override
         returns (bool upkeepNeeded, bytes memory performData)
     {
         if (s_InsuranceUsers.length == 0) return (false, "");
-        uint256 checkIndex = UpkeepChecker();
+        uint256 checkIndex = getCheckIndex();
+        // emit CheckIndexSelected(checkIndex, s_InsuranceUsers[checkIndex]);
         uint256 currentTime = block.timestamp;
         uint256 timePassed = currentTime - s_startInsuranceTime[checkIndex];
         bool wholeDayPassed;
@@ -95,11 +110,10 @@ contract WeatherTriggeredInsurance is FunctionsClient, ConfirmedOwner, Automatio
         if (s_addressToLastRainCheck[s_InsuranceUsers[checkIndex]] == 0) {
             wholeDayPassed = true;
         } else {
-            wholeDayPassed = (currentTime - s_addressToLastRainCheck[s_InsuranceUsers[checkIndex]]) > 1 days;
+            wholeDayPassed = (currentTime - s_addressToLastRainCheck[s_InsuranceUsers[checkIndex]]) > 150;
         }
         // s_addressToLastRainCheck[s_InsuranceUsers[checkIndex]] = currentTime;
         // emit OneDayCheckUpdated(s_InsuranceUsers[checkIndex]);
-        upkeepNeeded = (validInsurance && wholeDayPassed);
         upkeepNeeded = (validInsurance && wholeDayPassed);
 
         if (upkeepNeeded) {
@@ -111,9 +125,10 @@ contract WeatherTriggeredInsurance is FunctionsClient, ConfirmedOwner, Automatio
     }
 
     function performUpkeep(bytes calldata performData) external override {
+        s_counter = (s_counter + 1) % s_InsuranceUsers.length;
         address user = abi.decode(performData, (address));
 
-        string[] memory args;
+        string[] memory args = new string[](2);
         args[0] = s_addressToFarmerLocation[user];
         args[1] = "9afe409adf567a9f89413f1c5d7875fc";
 
@@ -123,41 +138,48 @@ contract WeatherTriggeredInsurance is FunctionsClient, ConfirmedOwner, Automatio
         emit OneDayCheckUpdated(user);
     }
 
-    function UpkeepChecker() public returns (uint256) {
-        if (s_counter == s_InsuranceUsers.length) {
-            s_counter = 0;
-        } else {
-            s_counter++;
-        }
-        return s_counter;
+    function getCheckIndex() internal view returns (uint256) {
+        return (s_counter + 1) % s_InsuranceUsers.length;
     }
+    // function UpkeepChecker() public returns (uint256) {
+    //     if (s_counter == s_InsuranceUsers.length) {
+    //         s_counter = 0;
+    //     } else {
+    //         s_counter++;
+    //     }
+    //     return s_counter;
+    // }
 
     function _fulfillRequest(bytes32 requestId, bytes memory response, bytes memory err) internal override {
+        address user = s_requestIdToUser[requestId];
         if (s_lastRequestId != requestId) {
             revert UnexpectedRequestID(requestId); // Check if request IDs match
         }
 
-        address user = s_requestIdToUser[requestId];
         // Update the contract's state variables with the response and any errors
+        require(response.length > 0, "Empty API response");
         uint256 rainfall = abi.decode(response, (uint256));
         bool drought = isDrought(user, rainfall);
         if (drought) {
-            uint256 amount = (address(this).balance) / (s_InsuranceUsers.length / 4);
+            uint256 amount = 0.005 ether;
             (bool success,) = user.call{value: amount}("");
             if (!success) {
                 revert WeatherTriggeredInsurance__TransferFailed();
             }
-        }
-        //rainfall logic to trigger
-        s_lastResponse = response;
-        s_character = string(response);
-        s_lastError = err;
 
-        // Emit an event to log the response
-        emit Response(requestId, s_character, s_lastResponse, s_lastError);
+            emit DroughtPayout(user, amount);
+
+            //rainfall logic to trigger
+            s_lastResponse = response;
+            s_character = string(response);
+            s_lastError = err;
+
+            // Emit an event to log the response
+            emit Response(requestId, s_character, s_lastResponse, s_lastError);
+        }
     }
 
-    function sendRequest(uint64 subscriptionId, string[] memory args) public onlyOwner returns (bytes32 requestId) {
+    function sendRequest(uint64 subscriptionId, string[] memory args) public returns (bytes32 requestId) {
         FunctionsRequest.Request memory req;
         req.initializeRequestForInlineJavaScript(s_source); // Initialize the request with JS code
         if (args.length > 0) req.setArgs(args); // Set the arguments for the request
@@ -171,6 +193,7 @@ contract WeatherTriggeredInsurance is FunctionsClient, ConfirmedOwner, Automatio
     function isDrought(address user, uint256 rainfall) public returns (bool) {
         s_addressToRainData[user][s_addressToTimeAPIIsCalled[user] % 7] = rainfall;
         s_addressToTimeAPIIsCalled[user]++;
+        emit AddressToAPICalledUpdated(s_addressToTimeAPIIsCalled[user]);
         if (s_addressToTimeAPIIsCalled[user] < 7) return false;
         for (uint256 i = 0; i < 7; i++) {
             if (s_addressToRainData[user][i] > 500) {
@@ -178,5 +201,37 @@ contract WeatherTriggeredInsurance is FunctionsClient, ConfirmedOwner, Automatio
             }
         }
         return true;
+    }
+
+    function getStartInsuranceTime() external view returns (uint256[] memory) {
+        return s_startInsuranceTime;
+    }
+
+    function getInsuranceUsers() external view returns (address payable[] memory) {
+        return s_InsuranceUsers;
+    }
+
+    function getAddressToRainData(address user) external view returns (uint256[7] memory) {
+        return s_addressToRainData[user];
+    }
+
+    function getAddressToTimesAPICalled(address user) external view returns (uint256) {
+        return s_addressToTimeAPIIsCalled[user];
+    }
+
+    function getRequestIdToUser(bytes32 user) external view returns (address) {
+        return s_requestIdToUser[user];
+    }
+
+    function getAddressToLastRainCheck(address user) external view returns (uint256) {
+        return s_addressToLastRainCheck[user];
+    }
+
+    function getFarmerLocation(address user) external view returns (string memory) {
+        return s_addressToFarmerLocation[user];
+    }
+
+    function getInsurancePeriod(address user) external view returns (uint256) {
+        return s_adressToInsurancePeriod[user];
     }
 }
