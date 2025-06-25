@@ -24,6 +24,7 @@ contract HelperConfig is Script, CodeConstants {
         uint32 gasLimit;
         uint64 subscriptionId;
         string sourceString;
+        string apiKey;
         address mostRecentDeployed;
     }
 
@@ -53,13 +54,20 @@ contract HelperConfig is Script, CodeConstants {
         return NetworkConfig({
             router: 0xb83E47C2bC239B3bf370bc41e1459A34b41238D0,
             donId: 0x66756e2d657468657265756d2d7365706f6c69612d3100000000000000000000,
-            gasLimit: 800000,
+            gasLimit: 300000,
             subscriptionId: 5053,
-            sourceString: "const city = args[0];" "const apiKey = args[1];"
-                "const url = `https://api.openweathermap.org/data/2.5/weather?q=${city}&appid=${apiKey}&units=metric`;"
-                "const response = await Functions.makeHttpRequest({ url });" "if (response.error) {"
-                "throw Error('API call failed');}" 'const rainfall = response.data?.rain?.["1h"] ?? 0;'
-                "return Functions.encodeUint256(Math.round(rainfall * 100));",
+            sourceString: string(
+                abi.encodePacked(
+                    "const city = args[0];",
+                    "const apiKey = args[1];",
+                    "const url = `https://api.openweathermap.org/data/2.5/weather?q=${city}&appid=${apiKey}&units=metric`;",
+                    "const response = await Functions.makeHttpRequest({ url });"
+                    "if (response.error) {throw Error('API call failed');}",
+                    'const rainfall = response.data?.rain?.["1h"] ?? 0;',
+                    "return Functions.encodeUint256(Math.round(rainfall * 100));"
+                )
+            ),
+            apiKey: "9afe409adf567a9f89413f1c5d7875fc",
             mostRecentDeployed: DevOpsTools.get_most_recent_deployment("FarmerNFT", block.chainid)
         });
     }
@@ -79,6 +87,7 @@ contract HelperConfig is Script, CodeConstants {
             gasLimit: 500000,
             subscriptionId: 0,
             sourceString: "return Functions.encodeUint256(7);",
+            apiKey: "123",
             mostRecentDeployed: DevOpsTools.get_most_recent_deployment("FarmerNFT", block.chainid)
         });
         // mostRecentDeployed: 0xe0B39353F69b54e945364ffcdDD7901697Ca0166

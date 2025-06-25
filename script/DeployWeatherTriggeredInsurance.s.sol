@@ -20,6 +20,7 @@ contract DeployWeatherTriggeredInsurance is Script {
             config.gasLimit,
             config.subscriptionId,
             config.sourceString,
+            config.apiKey,
             config.mostRecentDeployed
         );
         vm.stopBroadcast();

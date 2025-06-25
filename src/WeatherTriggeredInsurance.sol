@@ -17,7 +17,6 @@ contract WeatherTriggeredInsurance is FunctionsClient, ConfirmedOwner, Automatio
     error WeatherTriggeredInsurance__NotEnoughFundsToGetInsurance();
     error UnexpectedRequestID(bytes32);
     error WeatherTriggeredInsurance__TransferFailed();
-    // error WeatherTriggeredInsurance__UpkeepNotNeeded(address);
 
     address payable[] private s_InsuranceUsers;
     uint256[] private s_startInsuranceTime;
@@ -27,8 +26,9 @@ contract WeatherTriggeredInsurance is FunctionsClient, ConfirmedOwner, Automatio
     bytes public s_lastError;
     uint64 public s_subscriptionId;
 
+    string private s_apiKey;
     string public s_source;
-    string public s_character;
+    string public s_lastRainfallString;
     bytes32 private immutable i_donID;
     uint32 private immutable i_gasLimit;
 
@@ -45,6 +45,7 @@ contract WeatherTriggeredInsurance is FunctionsClient, ConfirmedOwner, Automatio
         uint32 gasLimit,
         uint64 subscriptionId,
         string memory source,
+        string memory apiKey,
         address mostRecentDeployed
     ) FunctionsClient(router) ConfirmedOwner(msg.sender) {
         s_subscriptionId = subscriptionId;
@@ -52,6 +53,7 @@ contract WeatherTriggeredInsurance is FunctionsClient, ConfirmedOwner, Automatio
         i_donID = donId;
         i_gasLimit = gasLimit;
         s_source = source;
+        s_apiKey = apiKey;
         farmerNft = IERC721(mostRecentDeployed);
     }
 
@@ -64,15 +66,10 @@ contract WeatherTriggeredInsurance is FunctionsClient, ConfirmedOwner, Automatio
     event OneDayCheckUpdated(address indexed user);
     event LocationAssigned(address indexed user);
     event DroughtPayout(address indexed user, uint256 amount);
-    // event CheckIndexSelected(uint256 indexed index, address user);
     event AddressToAPICalledUpdated(uint256 indexed valueOfNumberofCalls);
 
     function getInsurance(string memory location) public payable {
-        // // console.log("Most recent deployed", s_mostRecentDeployed);
-        // console.log("FarmerNFT Address:", address(farmerNft));
-        // console.log("msg.sender:", msg.sender);
-        // console.log("Balance:", farmerNft.balanceOf(msg.sender));
-
+        //Follow CEI
         if (farmerNft.balanceOf(msg.sender) == 0) {
             revert WeatherTriggeredInsurance__FarmerNFTNotMinted();
         }
@@ -102,7 +99,7 @@ contract WeatherTriggeredInsurance is FunctionsClient, ConfirmedOwner, Automatio
     {
         if (s_InsuranceUsers.length == 0) return (false, "");
         uint256 checkIndex = getCheckIndex();
-        // emit CheckIndexSelected(checkIndex, s_InsuranceUsers[checkIndex]);
+
         uint256 currentTime = block.timestamp;
         uint256 timePassed = currentTime - s_startInsuranceTime[checkIndex];
         bool wholeDayPassed;
@@ -112,8 +109,7 @@ contract WeatherTriggeredInsurance is FunctionsClient, ConfirmedOwner, Automatio
         } else {
             wholeDayPassed = (currentTime - s_addressToLastRainCheck[s_InsuranceUsers[checkIndex]]) > 150;
         }
-        // s_addressToLastRainCheck[s_InsuranceUsers[checkIndex]] = currentTime;
-        // emit OneDayCheckUpdated(s_InsuranceUsers[checkIndex]);
+
         upkeepNeeded = (validInsurance && wholeDayPassed);
 
         if (upkeepNeeded) {
@@ -125,40 +121,29 @@ contract WeatherTriggeredInsurance is FunctionsClient, ConfirmedOwner, Automatio
     }
 
     function performUpkeep(bytes calldata performData) external override {
-        s_counter = (s_counter + 1) % s_InsuranceUsers.length;
         address user = abi.decode(performData, (address));
 
         string[] memory args = new string[](2);
         args[0] = s_addressToFarmerLocation[user];
-        args[1] = "9afe409adf567a9f89413f1c5d7875fc";
+        args[1] = s_apiKey;
 
         bytes32 requestId = sendRequest(s_subscriptionId, args);
         s_requestIdToUser[requestId] = user;
         s_addressToLastRainCheck[user] = block.timestamp;
         emit OneDayCheckUpdated(user);
+        s_counter = (s_counter + 1) % s_InsuranceUsers.length;
     }
 
     function getCheckIndex() internal view returns (uint256) {
-        return (s_counter + 1) % s_InsuranceUsers.length;
+        return (s_counter) % s_InsuranceUsers.length;
     }
-    // function UpkeepChecker() public returns (uint256) {
-    //     if (s_counter == s_InsuranceUsers.length) {
-    //         s_counter = 0;
-    //     } else {
-    //         s_counter++;
-    //     }
-    //     return s_counter;
-    // }
 
     function _fulfillRequest(bytes32 requestId, bytes memory response, bytes memory err) internal override {
-        address user = s_requestIdToUser[requestId];
-        if (s_lastRequestId != requestId) {
-            revert UnexpectedRequestID(requestId); // Check if request IDs match
-        }
-
         // Update the contract's state variables with the response and any errors
         require(response.length > 0, "Empty API response");
         uint256 rainfall = abi.decode(response, (uint256));
+
+        address user = s_requestIdToUser[requestId];
         bool drought = isDrought(user, rainfall);
         if (drought) {
             uint256 amount = 0.005 ether;
@@ -171,15 +156,20 @@ contract WeatherTriggeredInsurance is FunctionsClient, ConfirmedOwner, Automatio
 
             //rainfall logic to trigger
             s_lastResponse = response;
-            s_character = string(response);
+            s_lastRainfallString = string(response);
             s_lastError = err;
 
             // Emit an event to log the response
-            emit Response(requestId, s_character, s_lastResponse, s_lastError);
+            emit Response(requestId, s_lastRainfallString, s_lastResponse, s_lastError);
         }
     }
 
-    function sendRequest(uint64 subscriptionId, string[] memory args) public returns (bytes32 requestId) {
+    function sendRequest(uint64 subscriptionId, string[] memory args) public onlyOwner returns (bytes32 requestId) {
+        require(bytes(s_source).length > 0, "Source code not set");
+        require(subscriptionId > 0, "Invalid subscription ID");
+        require(args.length >= 2, "Missing args"); // Since you need location + API key
+        require(bytes(args[0]).length > 0, "Location empty");
+        require(bytes(args[1]).length > 0, "API key empty");
         FunctionsRequest.Request memory req;
         req.initializeRequestForInlineJavaScript(s_source); // Initialize the request with JS code
         if (args.length > 0) req.setArgs(args); // Set the arguments for the request
