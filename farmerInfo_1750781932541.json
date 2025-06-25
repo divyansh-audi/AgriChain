@@ -1,0 +1,27 @@
+{
+  "name": "Farmer: Test User",
+  "description": "A test farmer from Rajasthan.",
+  "image": "https://ipfs.io/ipfs/testimage",
+  "attributes": [
+    {
+      "trait_type": "Location",
+      "value": "Rajasthan"
+    },
+    {
+      "trait_type": "Crop Type",
+      "value": "Millet"
+    },
+    {
+      "trait_type": "Farming Method",
+      "value": "Organic"
+    },
+    {
+      "trait_type": "Farm Size (Acres)",
+      "value": "10"
+    },
+    {
+      "trait_type": "Years of Experience",
+      "value": "5"
+    }
+  ]
+}
