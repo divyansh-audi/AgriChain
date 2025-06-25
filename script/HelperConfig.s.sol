@@ -5,6 +5,7 @@ import {Script} from "forge-std/Script.sol";
 import {WeatherTriggeredInsurance} from "src/WeatherTriggeredInsurance.sol";
 import {MockFunctionsRouter} from "../test/mocks/MockFunctionRouter.sol";
 import {DevOpsTools} from "lib/foundry-devops/src/DevOpsTools.sol";
+import {FarmerNFT} from "../src/FarmerNFT.sol";
 
 abstract contract CodeConstants {
     /*VRF MOCK VALUES */
@@ -79,6 +80,7 @@ contract HelperConfig is Script, CodeConstants {
 
         vm.startBroadcast();
         MockFunctionsRouter mockRouter = new MockFunctionsRouter();
+        FarmerNFT farmerNft = new FarmerNFT(); // Deploy a new FarmerNFT for tests
         vm.stopBroadcast();
 
         NetworkConfig memory localNetwork = NetworkConfig({
@@ -88,7 +90,7 @@ contract HelperConfig is Script, CodeConstants {
             subscriptionId: 0,
             sourceString: "return Functions.encodeUint256(7);",
             apiKey: "123",
-            mostRecentDeployed: DevOpsTools.get_most_recent_deployment("FarmerNFT", block.chainid)
+            mostRecentDeployed: address(farmerNft) // Use the address of the newly deployed FarmerNFT
         });
         // mostRecentDeployed: 0xe0B39353F69b54e945364ffcdDD7901697Ca0166
 
